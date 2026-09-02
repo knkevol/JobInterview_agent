@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AI 면접관 Agent</title>
+<style>
+  body { font-family: sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 20px; }
+  section { display: none; border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-top: 16px; }
+  section.active { display: block; }
+  input, textarea, button { font-size: 14px; padding: 8px; margin: 4px 0; width: 100%; box-sizing: border-box; }
+  button { cursor: pointer; width: auto; padding: 8px 16px; }
+  .tabs button { width: auto; margin-right: 8px; }
+  .tabs button.active { font-weight: bold; text-decoration: underline; }
+  pre { white-space: pre-wrap; background: #f5f5f5; padding: 10px; border-radius: 4px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-weight: bold; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>AI 면접관 Agent</h1>
+
+<div class="tabs">
+  <button id="tab-interview" class="active" onclick="showTab('interview')">면접 연습</button>
+  <button id="tab-quiz" onclick="showTab('quiz')">CS 지식 퀴즈</button>
+</div>
+
+<!-- ============ 면접 연습 탭 ============ -->
+<div id="panel-interview">
+
+  <section id="step-analyze" class="active">
+    <h2>① GitHub 저장소 분석</h2>
+    <div class="field">
+      <label>GitHub Repository URL</label>
+      <input id="repo-url-input" placeholder="https://github.com/owner/repo">
+    </div>
+    <button onclick="analyzeRepo()">분석 시작</button>
+    <p id="analyze-status"></p>
+  </section>
+
+  <section id="step-question">
+    <h2>② 오늘의 질문</h2>
+    <p id="question-text"></p>
+    <div class="field">
+      <label>답변</label>
+      <textarea id="answer-input" rows="6"></textarea>
+    </div>
+    <button onclick="submitAnswer()">답변 제출</button>
+  </section>
+
+  <section id="step-evaluation">
+    <h2>③ 평가 결과</h2>
+    <pre id="evaluation-result"></pre>
+    <button onclick="fetchQuestion()">다음 질문 받기</button>
+  </section>
+
+</div>
+
+<!-- ============ CS 퀴즈 탭 ============ -->
+<div id="panel-quiz" style="display:none;">
+  <section class="active">
+    <h2>CS 지식 퀴즈</h2>
+    <p id="quiz-category"></p>
+    <p id="quiz-question"></p>
+    <div class="field">
+      <label>정답</label>
+      <input id="quiz-answer-input">
+    </div>
+    <button onclick="submitQuizAnswer()">제출</button>
+    <pre id="quiz-result"></pre>
+    <button onclick="fetchQuiz()">다음 문제</button>
+  </section>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

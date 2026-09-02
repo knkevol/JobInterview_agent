@@ -75,6 +75,16 @@ def get_file_tree(owner: str, repo: str, branch: str = "") -> list[dict]:
         for item in data["tree"]
     ]
 
+def get_file_content(owner: str, repo: str, path: str, branch: str = "") -> str:
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}"
+    response = requests.get(url, headers=_headers(), params={"ref": branch})
+    response.raise_for_status()
+    file_data = response.json()
+
+    # 깃허브 API로 인코딩된 base64를 디코딩하여 문자열로 변환
+    decoded_bytes = base64.b64decode(file_data["content"])
+    return decoded_bytes.decode("utf-8", errors="replace")
+
 # 조합
 def scan_repository(repo_url: str) -> dict:
     owner, repo = parse_repo_url(repo_url)
