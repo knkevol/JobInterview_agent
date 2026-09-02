@@ -96,6 +96,22 @@ async function submitAnswer() {
     showStep("step-evaluation");
 }
 
+async function fetchFollowup() {
+    const response = await fetch(`/questions/${currentQuestionId}/followup`);
+    const data = await response.json();
+
+    if (!data.question_id) {
+        // question_id가 없다는 건 8단계가 다 끝났다는 뜻 (followup_generator.py가 None을 반환한 경우).
+        // 평가 결과 화면에 안내 메시지만 이어붙이고, 질문 화면으로는 넘어가지 않는다.
+        document.getElementById("evaluation-result").textContent += "\n\n" + data.message;
+        return;
+    }
+
+    currentQuestionId = data.question_id;
+    document.getElementById("question-text").textContent = `[깊이 ${data.depth}] ${data.question}`;
+    document.getElementById("answer-input").value = "";
+    showStep("step-question");
+}
 
 // ---------- CS 퀴즈 흐름 ----------
 

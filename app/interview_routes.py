@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.analysis_pipeline import analysis_repository
 from app.question_generator import generate_question
 from app.answer_evaluator import evaluate_answer
+from app.followup_generator import generate_followup
 from app import store
 
 router = APIRouter()
@@ -77,6 +78,28 @@ def post_questions_answer(question_id: str, body: AnswerRequest):
         raise HTTPException(status_code=404, detail="해당 question_id를 찾을 수 없습니다.")
 
     evaluation = evaluate_answer(question, body.answer)
-    store.save_evaluation(question_id, evaluation)
+    store.save_evaluation(question_id, evaluation, body.answer)
 
     return evaluation
+
+@router.get("/questions/{question_id}/followup")
+def get_questions_followup(question_id: str):
+    question = store.get_question(question_id)
+    if question is None:
+        raise HTTPException(status_code=404, detail="해당 question_id를 찾을 수 없습니다.")
+    if question["evaluation"] is None:
+        raise HTTPException(status_code=400, detail="평가가 없습니다. 답변을 제출하세요.")
+
+    followup = generate_followup(question, question["answer"], question["evaluation"])
+
+    if followup is None:
+        return {"question_id": None, "message": "질문이 끝났습니다. 새 질문을 받으세요."}
+
+    followup_id = store.save_question(
+        question["session_id"],
+        followup,
+        parent_question_id=question_id,
+        depth=followup["depth"],
+    )
+
+    return {"question_id": followup_id, "question": followup["question"], "depth": followup["depth"]}

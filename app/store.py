@@ -40,12 +40,15 @@ def create_session(repo_id: str) -> str:
 def get_session(session_id: str) -> dict | None:
     return _sessions.get(session_id)
 
-def save_question(session_id: str, question: dict) -> str:
+def save_question(session_id: str, question: dict, parent_question_id: str | None = None, depth: int = 0) -> str:
     question_id = _new_id()
+    # 파이썬 딕셔너리는 같은키가 여러번 나올 시 나중에 나온 값으로 사용됨
     _questions[question_id] = {
+        **question,  # question 딕셔너리 : (question/level/reference_evidence)
         "question_id": question_id,
         "session_id": session_id,
-        **question,  # question 딕셔너리 : (question/level/reference_evidence)
+        "parent_question_id": parent_question_id,
+        "depth": depth,
         "evaluation": None,
     }
     return question_id
@@ -53,5 +56,6 @@ def save_question(session_id: str, question: dict) -> str:
 def get_question(question_id: str) -> dict | None:
     return _questions.get(question_id)
 
-def save_evaluation(question_id: str, evaluation: dict) -> None:
+def save_evaluation(question_id: str, evaluation: dict, answer: str) -> None:
     _questions[question_id]["evaluation"] = evaluation
+    _questions[question_id]["answer"] = answer

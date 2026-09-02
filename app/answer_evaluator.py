@@ -1,16 +1,15 @@
 # 질문 + 질문의 근거 코드 + 지원자 답변 => LLM에 전달하여 평가하는 모듈
 
 import json
-import os
+import re
 
-from google import genai
-from google.genai import types
+# from google import genai
+# from google.genai import types
+
+from app.llm_client import generate_json
 from dotenv import load_dotenv
 
 load_dotenv()
-
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL_NAME = "gemini-3.6-flash"
 
 EVALUATION_SYSTEM_PROMPT = """당신은 시니어 개발자 면접관입니다.
 아래 세 가지 정보를 참고해서 지원자의 답변을 평가하세요.
@@ -34,22 +33,42 @@ EVALUATION_SYSTEM_PROMPT = """당신은 시니어 개발자 면접관입니다.
   구체적으로 설명하세요.
 - 주어진 evidence에 없는 내용을 "실제로 이렇게 구현되어 있다"는 식으로 지어내지 마세요.
   (근거 없는 서술 금지 원칙)
-
-아래 JSON 형식으로만 답변하세요.
-{
-  "score": 0~100 사이 정수 (총점),
-  "accuracy": 0~100 사이 정수 (실제 구현과의 일치도),
-  "depth": 0~100 사이 정수 (설명의 깊이/충실도),
-  "strengths": "답변의 장점",
-  "incorrect_points": "기술적으로 잘못된 내용 (없으면 빈 문자열)",
-  "mismatches_with_repo": "실제 프로젝트 구현과 다른 내용, evidence 인용 포함 (없으면 빈 문자열)",
-  "missing_explanations": "부족한 설명 (없으면 빈 문자열)",
-  "model_answer": "정석적인 모범 답변",
-  "further_explanation": "해당 질문에 대한 추가 설명",
-  "study_recommendations": ["추가로 공부할 개발 지식 목록"],
-  "related_concepts": ["관련된 언어/기술 개념 태그"]
-}
 """
+
+EVALUATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+         "score": {"type": "integer"},
+        "accuracy": {"type": "integer"},
+        "depth": {"type": "integer"},
+        "strengths": {"type": "string"},
+        "incorrect_points": {"type": "string"},
+         "mismatches_with_repo": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "claim": {"type": "string"},
+                    "evidence_quote": {"type": "string"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["claim", "evidence_quote", "explanation"],
+                "additionalProperties": False,
+            },
+        },
+        "missing_explanations": {"type": "string"},
+        "model_answer": {"type": "string"},
+        "further_explanation": {"type": "string"},
+        "study_recommendations": {"type": "array", "items": {"type": "string"}},
+        "related_concepts": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "score", "accuracy", "depth", "strengths", "incorrect_points",
+        "mismatches_with_repo", "missing_explanations", "model_answer",
+        "further_explanation", "study_recommendations", "related_concepts",
+    ],
+    "additionalProperties": False,
+}
 
 def build_evaluation_prompt(question: dict, user_answer: str) -> str:
     # LLM에게 전달할 텍스트로 조립
@@ -69,21 +88,35 @@ def build_evaluation_prompt(question: dict, user_answer: str) -> str:
 {user_answer}
 """
 
+def _normalize_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+def _verify_citations(mismatchs: list[dict], evidence_snippet: str) -> list[dict]:
+    normalize_evidence = _normalize_whitespace(evidence_snippet)
+
+    verify_list = []
+    for item in mismatchs:
+        quote = item.get("evidence_quote", "")
+        is_verified = _normalize_whitespace(quote) in normalize_evidence
+
+        verify_list.append({**item, "verified": is_verified})
+
+    return verify_list
+
 def evaluate_answer(question: dict, user_answer: str) -> dict:
     prompt = build_evaluation_prompt(question, user_answer)
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=EVALUATION_SYSTEM_PROMPT,
-            temperature=0.3,
-            max_output_tokens=2000,
-            response_mime_type="application/json",
-        ),
+    result = generate_json(
+        system_prompt=EVALUATION_SYSTEM_PROMPT,
+        user_message=prompt,
+        json_schema=EVALUATION_SCHEMA,
+        max_tokens=6000,
     )
+    evidence_snippet = question["reference_evidence"]["snippet"]
+    result["mismatches_with_repo"] = _verify_citations(result["mismatches_with_repo"], evidence_snippet)
 
-    return json.loads(response.text)
+    return result
+
 
 if __name__ == "__main__":
     import json as _json

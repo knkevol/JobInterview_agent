@@ -1,22 +1,20 @@
 import json
 import os
 
-from google import genai
-from google.genai import types
+# from google import genai
+# from google.genai import types
 from dotenv import load_dotenv
+
 from tree_sitter import Language, Parser
 import tree_sitter_cpp as tscpp
 
 from app.github_client import get_file_content
 from app.kb_builder import attach_evidence
+from app.llm_client import generate_json
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL_NAME = "gemini-3.6-flash"
-
 CPP_LANGUAGE = Language(tscpp.language())
-
 SIGNATURE_ONLY_THRESHOLD = 4000  # 시그니처만 추출할지 여부를 결정하는 임계값
 
 def extract_signature(source_code: str) -> str:
@@ -52,22 +50,60 @@ CODE_READING_SYSTEM_PROMPT = """당신은 C++/언리얼 엔진 코드를 분석�
 
 시그니처만 주어졌다면 본문 로직은 추측하지 말고, 이름과 타입에서 합리적으로
 유추할 수 있는 선까지만 작성하세요. (근거 없는 서술 금지 원칙)
-
-아래 JSON 형식으로만 답변하세요.
-{
-  "classes": [
-    {
-      "name": "클래스명",
-      "inherits_from": ["부모클래스"],
-      "member_variables": [{"name": "...", "type": "...", "note": "..."}],
-      "methods": [{"name": "...", "role": "..."}],
-      "design_patterns": ["..."],
-      "memory_management": "..."
-    }
-  ],
-  "tech_findings": ["이 파일에서 발견한 기술적 특징들"]
-}
 """
+
+CODE_READING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "classes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "inherits_from": {"type": "array", "items": {"type": "string"}},
+                    "member_variables": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "type": {"type": "string"},
+                                "note": {"type": "string"},
+                            },
+                            # required: 이 세 필드는 반드시 채워야 함 (비워두면 빈 문자열로라도 채움)
+                            "required": ["name", "type", "note"],
+                            # additionalProperties: False로 해야 스키마에 없는 필드를 LLM이 마음대로 추가 못 함
+                            "additionalProperties": False,
+                        },
+                    },
+                    "methods": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "role": {"type": "string"},
+                            },
+                            "required": ["name", "role"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "design_patterns": {"type": "array", "items": {"type": "string"}},
+                    "memory_management": {"type": "string"},
+                },
+                "required": [
+                    "name", "inherits_from", "member_variables",
+                    "methods", "design_patterns", "memory_management",
+                ],
+                "additionalProperties": False,
+            },
+        },
+        "tech_findings": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["classes", "tech_findings"],
+    "additionalProperties": False,
+}
 
 def read_code_file(owner: str, repo: str, path: str, branch: str) -> dict:
     source_code = get_file_content(owner, repo, path, branch)
@@ -87,18 +123,13 @@ def read_code_file(owner: str, repo: str, path: str, branch: str) -> dict:
 {code_for_llm}
 """
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=user_message,
-        config=types.GenerateContentConfig(
-            system_instruction=CODE_READING_SYSTEM_PROMPT,
-            temperature=0, 
-            max_output_tokens=8000,
-            response_mime_type="application/json", 
-        ),
+    result = generate_json(
+        system_prompt=CODE_READING_SYSTEM_PROMPT,
+        user_message=user_message,
+        json_schema=CODE_READING_SCHEMA,
+        max_tokens=8000,
+        temperature=0,
     )
-
-    result = json.loads(response.text)
 
     # LLM이 답하지 않아도 우리가 이미 알고 있는 정보(경로, 언어)는 파이썬 쪽에서 직접 채워 넣는다.
     result["file_path"] = path

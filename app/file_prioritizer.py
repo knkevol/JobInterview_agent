@@ -1,16 +1,12 @@
 import json
 import os
 
-from google import genai
-from google.genai import types
+# from google import genai
+# from google.genai import types
+from app.llm_client import generate_json
 from dotenv import load_dotenv
 
 load_dotenv()
-
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-MODEL_NAME = "gemini-3.6-flash"
-
 
 PRIORITIZATION_SYSTEM_PROMPT = """당신은 코드 리뷰 경험이 많은 시니어 개발자입니다.
 주어진 저장소의 README와 파일 목록만 보고, 개발자 면접 질문을 만들기 위해
@@ -21,17 +17,41 @@ PRIORITIZATION_SYSTEM_PROMPT = """당신은 코드 리뷰 경험이 많은 시�
 - 핵심 클래스/모듈이 정의된 파일
 - 디렉토리 구조상 중심적인 역할을 하는 파일
 
-아래 JSON 배열 형식으로 답변하세요.
-[
-  {"path": "파일 경로", "priority": 1, "reason": "선정 이유"}
-]
+files 배열 안에 {"path": "파일 경로", "priority": 1, "reason": "선정 이유"} 형태로 답변하세요.
 """
+
+PRIORITIZATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "files": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "priority": {"type": "integer"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["path", "priority", "reason"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["files"],
+    "additionalProperties": False,
+}
+
+# 분석 대상 파일 확장자 화이트리스트
+CODE_FILE_SUFFIXES = (".cpp", ".h", ".hpp", ".Build.cs", ".Target.cs", ".uproject")
+
+def _is_code_file(path: str) -> bool:
+    return path.endswith(CODE_FILE_SUFFIXES)
 
 def build_file_list_text(file_tree: list[dict]) -> str:
     file_lines = [
         f"{item['path']} ({item.get('size', 0)} bytes)"
         for item in file_tree
-        if item["type"] == "blob"
+        if item["type"] == "blob" and _is_code_file(item["path"])
     ]
     
     return "\n".join(file_lines)
@@ -50,21 +70,19 @@ def select_priority_files(readme: str | None, file_tree: list[dict], max_files: 
 위 정보를 참고하여, 최대 {max_files}개까지 파일을 우선순위와 함께 선정해주세요.
 """
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=user_message,
-        config=types.GenerateContentConfig(
-         system_instruction=PRIORITIZATION_SYSTEM_PROMPT,
-            temperature=0,
-            max_output_tokens=8000,
-            response_mime_type="application/json",
-        ),
+    result = generate_json(
+        PRIORITIZATION_SYSTEM_PROMPT,
+        user_message,
+        PRIORITIZATION_SCHEMA,
+        max_tokens=8000,
     )
 
-    return json.loads(response.text)
+    return result["files"]
 
 
 if __name__ == "__main__":
+    import json
+
     with open("result.json", "r", encoding="utf-8") as f:
         scanned = json.load(f)
 
