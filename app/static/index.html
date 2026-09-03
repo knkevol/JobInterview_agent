@@ -72,6 +72,20 @@
     <pre id="quiz-result"></pre>
     <button onclick="fetchQuiz()">다음 문제</button>
   </section>
+
+   <section class="active">
+    <h2>AI 퀴즈 (요청마다 비용 발생)</h2>
+    <button onclick="fetchLLMQuiz()">AI 문제 받기</button>
+    <p id="llm-quiz-status"></p>
+    <p id="llm-quiz-category"></p>
+    <p id="llm-quiz-question"></p>
+    <div class="field">
+      <label>정답</label>
+      <input id="llm-quiz-answer-input">
+    </div>
+    <button onclick="submitLLMQuizAnswer()">제출</button>
+    <pre id="llm-quiz-result"></pre>
+  </section>
 </div>
 
 <script src="/app.js"></script>

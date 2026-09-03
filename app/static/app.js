@@ -147,5 +147,51 @@ async function submitQuizAnswer() {
         `정답: ${result.correct_answer}\n해설: ${result.explanation}`;
 }
 
+// ---------- AI 퀴즈 흐름 (호출마다 비용 발생) ----------
+let currentLLMQuizQuestion = null;
+let currentLLMQuizCategory = null;
+
+async function fetchLLMQuiz() {
+    document.getElementById("llm-quiz-status").textContent = "AI가 문제를 만드는 중입니다...";
+
+    const response = await fetch("/quiz/llm/generate");
+    const data = await response.json();
+
+    currentLLMQuizQuestion = data.question;
+    currentLLMQuizCategory = data.category;
+
+    document.getElementById("llm-quiz-category").textContent = `[${data.category}]`;
+    document.getElementById("llm-quiz-question").textContent = data.question;
+    document.getElementById("llm-quiz-answer-input").value = "";
+    document.getElementById("llm-quiz-result").textContent = "";
+    document.getElementById("llm-quiz-status").textContent = "";
+}
+
+async function submitLLMQuizAnswer() {
+    const answer = document.getElementById("llm-quiz-answer-input").value;
+
+    const response = await fetch("/quiz/llm/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            question: currentLLMQuizQuestion,
+            category: currentLLMQuizCategory,
+            answer: answer,
+        }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        document.getElementById("llm-quiz-result").textContent = "채점 실패: " + JSON.stringify(error.detail);
+        return;
+    }
+
+    const result = await response.json();
+
+    document.getElementById("llm-quiz-result").textContent =
+        (result.is_correct ? "정답입니다! " : "오답입니다. ") +
+        `모범 답안: ${result.model_answer}\n설명: ${result.explanation}`;
+}
+
 // 페이지가 처음 열리면 CS 퀴즈 탭도 미리 문제 하나를 받아둔다.
 fetchQuiz();
