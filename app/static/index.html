@@ -15,6 +15,16 @@
   pre { white-space: pre-wrap; background: #f5f5f5; padding: 10px; border-radius: 4px; }
   .field { margin-bottom: 12px; }
   .field label { display: block; font-weight: bold; margin-bottom: 4px; }
+  details { margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; padding: 6px 10px; }
+  summary { cursor: pointer; font-weight: bold; }
+  .hb-section { margin: 10px 0; padding-top: 8px; border-top: 1px solid #eee; }
+  .hb-section h4 { margin: 0 0 6px; font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.03em; }
+  .code-block { background: #1e1e1e; color: #d4d4d4; font-family: monospace; font-size: 13px; }
+  .score-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .score-badge { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 12px; padding: 2px 10px; font-size: 13px; font-weight: bold; width: auto; }
+  .mismatch-card { background: #fff7f0; border: 1px solid #f3d9b1; border-radius: 6px; padding: 8px 10px; margin: 6px 0; }
+  .mismatch-card.verified { border-color: #b7e4c7; background: #f1faf4; }
+  .tag { display: inline-block; background: #f0f0f0; border-radius: 10px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: 12px; width: auto; }
 </style>
 </head>
 <body>
@@ -28,6 +38,8 @@
 
 <!-- ============ 면접 연습 탭 ============ -->
 <div id="panel-interview">
+  <button onclick="fetchHistory()">지금까지 기록 보기</button>
+  <pre id="history-result"></pre>
 
   <section id="step-analyze" class="active">
     <h2>① GitHub 저장소 분석</h2>
@@ -51,7 +63,7 @@
 
   <section id="step-evaluation">
     <h2>③ 평가 결과</h2>
-    <pre id="evaluation-result"></pre>
+     <div id="evaluation-result"></div>
     <button onclick="fetchFollowup()">꼬리질문 받기</button>
     <button onclick="fetchQuestion()">새 질문 받기 (다른 코드)</button>
   </section>

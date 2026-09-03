@@ -31,6 +31,43 @@ def init_db() -> None:
                 answered_at TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS repositories (
+                id TEXT PRIMARY KEY,
+                repo_url TEXT NOT NULL,
+                status TEXT NOT NULL,
+                knowledge_base_json TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL
+                )        
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                id TEXT PRIMARY KEY,
+                repo_id TEXT NOT NULL REFERENCES repositories(id),
+                created_at TEXT NOT NULL
+            )
+        """)
+        # 꼬리질문. 자기참조테이블
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS questions (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES sessions(id),
+                parent_question_id TEXT REFERENCES questions(id),
+                depth INTEGER NOT NULL DEFAULT 0,
+                question_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id TEXT NOT NULL REFERENCES questions(id),
+                answer_text TEXT NOT NULL,
+                evaluation_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
         conn.commit()
     finally:
         conn.close()

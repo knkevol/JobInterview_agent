@@ -53,6 +53,13 @@ def post_sessions(body: CreateSessionRequest):
     session_id = store.create_session(body.repo_id)
     return {"session_id": session_id}
 
+@router.get("/sessions/{session_id}/history")
+def get_sessions_history(session_id: str):
+    session = store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="해당 session_id를 찾을 수 없습니다.")
+    return store.get_session_history(session_id)
+
 
 @router.get("/sessions/{session_id}/question")
 def get_sessions_question(session_id: str):
