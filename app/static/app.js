@@ -16,11 +16,15 @@ let currentQuizId = null;
 
 
 function showTab(tabName) {
-    // 탭 버튼과 패널을 보이거나 숨기는, 순수 DOM 조작.
-    document.getElementById("panel-interview").style.display = tabName === "interview" ? "block" : "none";
-    document.getElementById("panel-quiz").style.display = tabName === "quiz" ? "block" : "none";
-    document.getElementById("tab-interview").classList.toggle("active", tabName === "interview");
-    document.getElementById("tab-quiz").classList.toggle("active", tabName === "quiz");
+    // 하드코딩으로 2개(interview/quiz)만 처리하던 걸, 리스트 순회로 바꿔서
+    // 탭이 몇 개로 늘어나도 이 함수는 안 고쳐도 되게 일반화했다.
+    for (const name of ["interview", "quiz", "weak"]) {
+        document.getElementById(`panel-${name}`).style.display = name === tabName ? "block" : "none";
+        document.getElementById(`tab-${name}`).classList.toggle("active", name === tabName);
+    }
+    if (tabName === "weak") {
+        fetchWeakTopics();
+    }
 }
 
 function showStep(stepId) {
@@ -331,3 +335,37 @@ async function submitLLMQuizAnswer() {
 
 // 페이지가 처음 열리면 CS 퀴즈 탭도 미리 문제 하나를 받아둔다.
 fetchQuiz();
+
+// ---------- 취약 주제 대시보드 ----------
+async function fetchWeakTopics() {
+    const response = await fetch("/weak-topics");
+    const data = await response.json();
+
+    const container = document.getElementById("weak-topics-result");
+    container.innerHTML = "";
+
+    if (data.length === 0) {
+        container.textContent = "아직 2회 이상 반복된 취약 주제가 없습니다.";
+        return;
+    }
+
+    for (const item of data) {
+        const details = document.createElement("details");
+
+        const summary = document.createElement("summary");
+        summary.textContent = `${item.topic} — ${item.occurrence_count}회 등장`;
+        details.appendChild(summary);
+
+        for (const occ of item.occurrences) {
+            const card = document.createElement("div");
+            card.className = "hb-section";
+            const p = document.createElement("p");
+            p.textContent = `[점수 ${occ.score}] ${occ.question}`;
+            card.appendChild(p);
+            addLabeledText(card, "부족했던 설명", occ.missing_explanations);
+            details.appendChild(card);
+        }
+
+        container.appendChild(details);
+    }
+}

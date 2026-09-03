@@ -3,6 +3,7 @@
 
 import json
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 
 from app.db import get_connection
@@ -186,3 +187,45 @@ def get_session_history(session_id: str) -> list[dict]:
         history.append(entry)
 
     return history
+
+def get_weak_topics() -> list[dict]:
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT
+                q.id AS question_id,
+                q.question_json,
+                e.evaluation_json
+            FROM evaluations e
+            JOIN questions q ON q.id = e.question_id
+        """).fetchall()
+    finally:
+        conn.close()
+
+    topic_counts = Counter()
+    topic_occurrences: dict[str, list[dict]] = {}
+
+    for row in rows:
+        evaluation = json.loads(row["evaluation_json"])
+        question = json.loads(row["question_json"])
+
+        for concept in evaluation.get("related_concepts", []):
+            topic_counts[concept] += 1
+            topic_occurrences.setdefault(concept, []).append({
+                "question_id": row["question_id"],
+                "question": question.get("question"),
+                "score": evaluation.get("score"),
+                "missing_explanations": evaluation.get("missing_explanations"),
+            })
+
+    result = []
+    for topic, count in topic_counts.most_common():
+        if count < 2:
+            continue
+        result.append({
+            "topic": topic,
+            "occurrence_count": count,
+            "occurrences": topic_occurrences[topic],
+        })
+
+    return result

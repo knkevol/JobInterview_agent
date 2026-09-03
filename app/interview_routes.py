@@ -110,3 +110,7 @@ def get_questions_followup(question_id: str):
     )
 
     return {"question_id": followup_id, "question": followup["question"], "depth": followup["depth"]}
+
+@router.get("/weak-topics")
+def get_weak_topics_route():
+    return store.get_weak_topics()

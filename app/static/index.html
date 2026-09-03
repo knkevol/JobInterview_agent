@@ -34,6 +34,7 @@
 <div class="tabs">
   <button id="tab-interview" class="active" onclick="showTab('interview')">면접 연습</button>
   <button id="tab-quiz" onclick="showTab('quiz')">CS 지식 퀴즈</button>
+  <button id="tab-weak" onclick="showTab('weak')">취약 주제</button>
 </div>
 
 <!-- ============ 면접 연습 탭 ============ -->
@@ -97,6 +98,15 @@
     </div>
     <button onclick="submitLLMQuizAnswer()">제출</button>
     <pre id="llm-quiz-result"></pre>
+  </section>
+</div>
+
+<!-- ============ 취약 주제 대시보드 탭 ============ -->
+<div id="panel-weak" style="display:none;">
+  <section class="active">
+    <h2>취약 주제 대시보드</h2>
+    <p>지금까지의 평가 기록 중 2회 이상 반복해서 지적된 개념을 모아 보여줍니다.</p>
+    <div id="weak-topics-result"></div>
   </section>
 </div>
 
