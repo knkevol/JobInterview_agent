@@ -25,6 +25,17 @@
   .mismatch-card { background: #fff7f0; border: 1px solid #f3d9b1; border-radius: 6px; padding: 8px 10px; margin: 6px 0; }
   .mismatch-card.verified { border-color: #b7e4c7; background: #f1faf4; }
   .tag { display: inline-block; background: #f0f0f0; border-radius: 10px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: 12px; width: auto; }
+  #repo-list { list-style: none; padding: 0; }
+  .repo-list-item { border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+  .repo-row { display: flex; align-items: center; justify-content: space-between; }
+  .repo-row .repo-info { cursor: pointer; flex: 1; }
+  .repo-row .repo-info:hover { text-decoration: underline; }
+  .repo-row button { width: auto; padding: 4px 10px; margin-left: 8px; }
+  .repo-files { margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; font-size: 13px; }
+  .repo-files ol { margin: 0; padding-left: 20px; }
+  .repo-files li { margin-bottom: 8px; }
+  .repo-files .file-path { font-weight: bold; }
+  .repo-files .file-reason { color: #666; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -50,16 +61,25 @@
     </div>
     <button onclick="analyzeRepo()">분석 시작</button>
     <p id="analyze-status"></p>
+
+    <div id="repo-list-container">
+      <h3>분석된 저장소 목록</h3>
+      <ul id="repo-list"></ul>
+    </div>
   </section>
 
   <section id="step-question">
     <h2>② 오늘의 질문</h2>
     <p id="question-text"></p>
+    <div id="question-evidence"></div>
+    <!-- ↑ fetchQuestion()/fetchFollowup()이 매번 이 안을 비우고 근거 코드 박스를 새로 그려 넣는다 -->
     <div class="field">
       <label>답변</label>
       <textarea id="answer-input" rows="6"></textarea>
     </div>
-    <button onclick="submitAnswer()">답변 제출</button>
+    <button id="submit-answer-btn" onclick="submitAnswer()">답변 제출</button>
+    <p id="submit-answer-status"></p>
+    <!-- ↑ 기능 3(로딩 표시)에서 쓸 상태 문구 자리 -->
   </section>
 
   <section id="step-evaluation">

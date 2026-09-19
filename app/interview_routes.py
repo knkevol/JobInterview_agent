@@ -18,7 +18,7 @@ class AnalyzeRequest(BaseModel):
 
 @router.post("/repos/analyze")
 def post_repos_analyze(body: AnalyzeRequest):
-    repo_id = store.create_repo(body.repo_url)
+    repo_id = store.find_repo_by_url(body.repo_url) or store.create_repo(body.repo_url)
 
     try:
         knowledge_base = analysis_repository(body.repo_url)
@@ -36,6 +36,39 @@ def get_repos_status(repo_id: str):
     if repo is None:
         raise HTTPException(status_code=404, detail="해당 repo_id를 찾을 수 없습니다.")
     return {"repo_id": repo_id, "status": repo["status"], "error": repo["error"]}
+
+@router.get("/repos")
+def get_repos_list():
+    return store.list_repos()
+
+@router.get("/repos/{repo_id}/files")
+def get_repos_files(repo_id: str):
+    repo = store.get_repo(repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="해당 repo_id를 찾을 수 없습니다.")
+    if repo["status"] != "done":
+        raise HTTPException(status_code=400, detail="분석이 완료되지 않았습니다.")
+
+    files = [
+        {
+            "file_path": entry.get("file_path"),
+            "priority": entry.get("priority"),
+            "reason": entry.get("reason"),
+        }
+        for entry in repo["knowledge_base"]
+    ]
+    # priority 숫자가 작을수록(1이 가장 중요) 위로 오게 정렬.
+    files.sort(key=lambda f: (f["priority"] is None, f["priority"]))
+    return files
+
+@router.delete("/repos/{repo_id}")
+def delete_repos(repo_id: str):
+    repo = store.get_repo(repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="해당 repo_id를 찾을 수 없습니다.")
+
+    store.delete_repo(repo_id)
+    return {"repo_id": repo_id, "status": "deleted"}
 
 
 class CreateSessionRequest(BaseModel):
@@ -71,7 +104,7 @@ def get_sessions_question(session_id: str):
     question = generate_question(repo["knowledge_base"])
     question_id = store.save_question(session_id, question)
 
-    return {"question_id": question_id, "question": question["question"], "level": question["level"]}
+    return {"question_id": question_id, "question": question["question"], "level": question["level"], "reference_evidence": question["reference_evidence"]}
 
 
 class AnswerRequest(BaseModel):
@@ -109,7 +142,7 @@ def get_questions_followup(question_id: str):
         depth=followup["depth"],
     )
 
-    return {"question_id": followup_id, "question": followup["question"], "depth": followup["depth"]}
+    return {"question_id": followup_id, "question": followup["question"], "depth": followup["depth"], "reference_evidence": followup["reference_evidence"]}
 
 @router.get("/weak-topics")
 def get_weak_topics_route():

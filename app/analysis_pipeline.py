@@ -16,7 +16,7 @@ def _cache_path(repo_url: str) -> Path:
     url_hash = hashlib.sha256(repo_url.encode()).hexdigest()[:16]
     return CACHE_DIR / f"{url_hash}.json"
 
-def analysis_repository(repo_url: str, max_file: int = 5) -> list[dict]:
+def analysis_repository(repo_url: str, max_file: int = 15) -> list[dict]:
     cache_path = _cache_path(repo_url)
 
     if cache_path.exists():
@@ -38,6 +38,9 @@ def analysis_repository(repo_url: str, max_file: int = 5) -> list[dict]:
         path = file_info["path"]
         try:
             entry = read_code_file(owner, repo, path, branch)
+            # select_priority_files()가 매긴 순위와 이유를 entry에도 같이 넣어둔다.(LLM 호출하지 않고 저장된 knowledge_base로 중요도판단 설명가능)
+            entry["priority"] = file_info["priority"]
+            entry["reason"] = file_info["reason"]
             knowledge_base.append(entry)
         except Exception as e:
             print(f"Error reading {path}: {e}")

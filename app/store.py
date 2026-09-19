@@ -32,6 +32,19 @@ def create_repo(repo_url: str) -> str:
 
     return repo_id
 
+# 같은 repo_url로 이미 분석한 적이 있으면 그 repo_id를 돌려준다 (없으면 None).
+def find_repo_by_url(repo_url: str) -> str | None:
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id FROM repositories WHERE repo_url = ? ORDER BY created_at DESC LIMIT 1",
+            (repo_url,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    return row["id"] if row else None
+
 def get_repo(repo_id: str) -> dict | None:
     conn = get_connection()
     try:
@@ -69,6 +82,50 @@ def mark_repo_error(repo_id: str, error_message: str) -> None:
             "UPDATE repositories SET status = ?, error = ? WHERE id = ?",
             ("error", error_message, repo_id),
         )
+        conn.commit()
+    finally:
+        conn.close()
+
+# 분석된 모든 저장소를 최신순 나열.
+def list_repos() -> list[dict]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, repo_url, status, knowledge_base_json, created_at FROM repositories ORDER BY created_at DESC"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    repos = []
+    for row in rows:
+        kb = json.loads(row["knowledge_base_json"]) if row["knowledge_base_json"] else None
+        repos.append({
+            "repo_id": row["id"],
+            "repo_url": row["repo_url"],
+            "status": row["status"],
+            "file_count": len(kb) if kb is not None else None,
+            "created_at": row["created_at"],
+        })
+    return repos
+
+
+# 저장소와 그 저장소로부터 파생된 세션/질문/평가를 전부 삭제
+def delete_repo(repo_id: str) -> None:
+    conn = get_connection()
+    try:
+        session_rows = conn.execute("SELECT id FROM sessions WHERE repo_id = ?", (repo_id,)).fetchall()
+        session_ids = [row["id"] for row in session_rows]
+
+        for session_id in session_ids:
+            question_rows = conn.execute("SELECT id FROM questions WHERE session_id = ?", (session_id,)).fetchall()
+            question_ids = [row["id"] for row in question_rows]
+
+            for question_id in question_ids:
+                conn.execute("DELETE FROM evaluations WHERE question_id = ?", (question_id,))
+            conn.execute("DELETE FROM questions WHERE session_id = ?", (session_id,))
+
+        conn.execute("DELETE FROM sessions WHERE repo_id = ?", (repo_id,))
+        conn.execute("DELETE FROM repositories WHERE id = ?", (repo_id,))
         conn.commit()
     finally:
         conn.close()

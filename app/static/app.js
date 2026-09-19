@@ -36,7 +36,6 @@ function showStep(stepId) {
 
 
 // ---------- 면접 연습 흐름 ----------
-
 async function analyzeRepo() {
     const repoUrl = document.getElementById("repo-url-input").value;
     document.getElementById("analyze-status").textContent = "분석 중입니다... (LLM 호출이 여러 번 있어서 시간이 좀 걸립니다)";
@@ -59,6 +58,8 @@ async function analyzeRepo() {
     currentRepoId = data.repo_id;
     document.getElementById("analyze-status").textContent = `분석 완료 (파일 ${data.file_count}개)`;
 
+    await fetchRepoList(); // 방금 분석한 저장소가 리스트에 바로 반영되도록 새로고침
+
     await startSession();
 }
 
@@ -80,25 +81,41 @@ async function fetchQuestion() {
     currentQuestionId = data.question_id;
 
     document.getElementById("question-text").textContent = data.question;
+
+    const evidenceContainer = document.getElementById("question-evidence");
+    evidenceContainer.innerHTML = ""; // 이전 질문의 근거 코드 초기화
+    renderEvidenceBox(evidenceContainer, data.reference_evidence);
+
     document.getElementById("answer-input").value = "";
+    document.getElementById("submit-answer-status").textContent = "";
     showStep("step-question");
 }
 
 async function submitAnswer() {
     const answer = document.getElementById("answer-input").value;
+    const submitBtn = document.getElementById("submit-answer-btn");
+    const statusEl = document.getElementById("submit-answer-status");
 
-    const response = await fetch(`/questions/${currentQuestionId}/answer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answer: answer }),
-    });
-    const evaluation = await response.json();
+    submitBtn.disabled = true; // 요청 진행 중 중복 제출 방지
+    statusEl.textContent = "채점 중입니다... (LLM이 답변을 평가하고 있어요)";
 
-    const container = document.getElementById("evaluation-result");
-    container.innerHTML = ""; 
-    container.appendChild(renderEvaluation(evaluation));
+    try {
+        const response = await fetch(`/questions/${currentQuestionId}/answer`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answer: answer }),
+        });
+        const evaluation = await response.json();
 
-    showStep("step-evaluation");
+        const container = document.getElementById("evaluation-result");
+        container.innerHTML = "";
+        container.appendChild(renderEvaluation(evaluation));
+
+        showStep("step-evaluation");
+    } finally {
+        submitBtn.disabled = false;
+        statusEl.textContent = "";
+    }
 }
 
 async function fetchFollowup() {
@@ -114,6 +131,11 @@ async function fetchFollowup() {
 
     currentQuestionId = data.question_id;
     document.getElementById("question-text").textContent = `[깊이 ${data.depth}] ${data.question}`;
+
+    const evidenceContainer = document.getElementById("question-evidence");
+    evidenceContainer.innerHTML = "";
+    renderEvidenceBox(evidenceContainer, data.reference_evidence);
+
     document.getElementById("answer-input").value = "";
     showStep("step-question");
 }
@@ -141,6 +163,21 @@ function addSection(parent, title) {
     section.appendChild(h4);
     parent.appendChild(section);
     return section;
+}
+
+function renderEvidenceBox(parent, evidence) {
+    if (!evidence) return;
+
+    const section = addSection(parent, "근거 코드");
+
+    const meta = document.createElement("div");
+    meta.textContent = `${evidence.file_path} · ${evidence.class_name}::${evidence.method_name}`;
+    section.appendChild(meta);
+
+    const pre = document.createElement("pre");
+    pre.className = "code-block";
+    pre.textContent = evidence.snippet;
+    section.appendChild(pre);
 }
 
 // 평가 결과의 점수 뱃지/문단/근거 인용을 카드/태그 칩으로 나눠 그린 <div>를 만들어 돌려준다.
@@ -232,14 +269,7 @@ async function fetchHistory() {
         summary.textContent = `[깊이 ${item.depth}] ${item.question}`;
         details.appendChild(summary);
 
-        const evidenceSection = addSection(details, "근거 코드");
-        const evMeta = document.createElement("div");
-        evMeta.textContent = `${item.reference_evidence.file_path} · ${item.reference_evidence.class_name}::${item.reference_evidence.method_name}`;
-        evidenceSection.appendChild(evMeta);
-        const evPre = document.createElement("pre");
-        evPre.className = "code-block";
-        evPre.textContent = item.reference_evidence.snippet;
-        evidenceSection.appendChild(evPre);
+        renderEvidenceBox(details, item.reference_evidence);
 
         const answerSection = addSection(details, "내 답변");
         // ?? : item.answer가 null/undefined일 때만 오른쪽 문구를 쓰는 널 병합 연산자
@@ -251,6 +281,138 @@ async function fetchHistory() {
 
         container.appendChild(details);
     }
+}
+
+// ---------- 저장소 리스트 ----------
+// 페이지를 처음 열 때, 새 저장소 분석이 끝났을 때, 삭제 버튼을 눌렀을 때 각각 호출하여 화면의 목록이 항상 DB 상태와 일치하도록 함.
+async function fetchRepoList() {
+    const response = await fetch("/repos");
+    const repos = await response.json();
+
+    const list = document.getElementById("repo-list");
+    list.innerHTML = "";
+
+    if (repos.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "아직 분석한 저장소가 없습니다.";
+        list.appendChild(li);
+        return;
+    }
+
+    for (const repo of repos) {
+        const li = document.createElement("li");
+        li.className = "repo-list-item";
+
+        // 이름/상태 + 버튼들을 한 줄에 나열하는 행(row). 파일 목록 박스는 이 아래에 별도로 붙는다.
+        const row = document.createElement("div");
+        row.className = "repo-row";
+
+        // 이 부분을 클릭하면 더 이상 바로 질문을 시작하지 않고, 중요 파일 목록을 펼쳐서 보여준다.
+        const info = document.createElement("span");
+        info.className = "repo-info";
+        const statusLabel = repo.status === "done" ? `파일 ${repo.file_count}개` : repo.status;
+        info.textContent = `${repo.repo_url} (${statusLabel})`;
+        info.onclick = () => toggleRepoFiles(repo.repo_id, filesBox);
+        row.appendChild(info);
+
+        // "질문" 버튼: 예전에 repo-info를 클릭했을 때 하던 일(재분석 없이 바로 세션 시작)을 이제 이 버튼이 담당한다.
+        const questionBtn = document.createElement("button");
+        questionBtn.textContent = "질문";
+        questionBtn.onclick = (event) => {
+            event.stopPropagation();
+            startExistingSession(repo.repo_id, repo.status);
+        };
+        row.appendChild(questionBtn);
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "삭제";
+        deleteBtn.onclick = (event) => {
+            event.stopPropagation();
+            deleteRepo(repo.repo_id);
+        };
+        row.appendChild(deleteBtn);
+
+        li.appendChild(row);
+
+        // 중요 파일 목록이 펼쳐질 자리. 처음엔 숨겨두고, info를 클릭할 때 toggleRepoFiles()가 채워 넣는다.
+        const filesBox = document.createElement("div");
+        filesBox.className = "repo-files";
+        filesBox.style.display = "none";
+        li.appendChild(filesBox);
+
+        list.appendChild(li);
+    }
+}
+
+// 저장소 이름을 클릭했을 때: 이미 펼쳐져 있으면 접고, 접혀 있으면 서버에서 파일 목록을 받아와 펼친다.
+// 매번 새로 fetch하지만 DB 조회 한 번뿐이라(LLM 호출 없음) 여러 번 열고 닫아도 비용이 들지 않는다.
+async function toggleRepoFiles(repoId, filesBox) {
+    const isCollapsed = filesBox.style.display === "none";
+    if (!isCollapsed) {
+        filesBox.style.display = "none";
+        return;
+    }
+
+    filesBox.style.display = "block";
+    filesBox.textContent = "불러오는 중...";
+
+    const response = await fetch(`/repos/${repoId}/files`);
+    if (!response.ok) {
+        filesBox.textContent = "파일 목록을 불러오지 못했습니다.";
+        return;
+    }
+
+    const files = await response.json();
+    renderRepoFiles(filesBox, files);
+}
+
+// 중요 파일 목록(경로 + 선정 이유)을 순위대로 그린다.
+function renderRepoFiles(container, files) {
+    container.innerHTML = "";
+
+    if (files.length === 0) {
+        container.textContent = "분석된 파일이 없습니다.";
+        return;
+    }
+
+    const ol = document.createElement("ol");
+    for (const file of files) {
+        const li = document.createElement("li");
+
+        const pathEl = document.createElement("div");
+        pathEl.className = "file-path";
+        pathEl.textContent = file.file_path;
+        li.appendChild(pathEl);
+
+        if (file.reason) {
+            const reasonEl = document.createElement("div");
+            reasonEl.className = "file-reason";
+            reasonEl.textContent = file.reason;
+            li.appendChild(reasonEl);
+        }
+
+        ol.appendChild(li);
+    }
+    container.appendChild(ol);
+}
+
+// 목록에서 저장소를 클릭했을 때 실행.
+async function startExistingSession(repoId, status) {
+    if (status !== "done") {
+        alert("이 저장소는 아직 분석이 완료되지 않았거나 실패했습니다.");
+        return;
+    }
+    currentRepoId = repoId;
+    document.getElementById("analyze-status").textContent = "";
+    await startSession();
+}
+
+async function deleteRepo(repoId) {
+    if (!confirm("이 저장소의 분석 기록을 삭제할까요? 관련 세션/질문 기록도 함께 삭제됩니다.")) {
+        return;
+    }
+    await fetch(`/repos/${repoId}`, { method: "DELETE" });
+    await fetchRepoList();
 }
 
 // ---------- CS 퀴즈 흐름 ----------
@@ -333,8 +495,9 @@ async function submitLLMQuizAnswer() {
         `모범 답안: ${result.model_answer}\n설명: ${result.explanation}`;
 }
 
-// 페이지가 처음 열리면 CS 퀴즈 탭도 미리 문제 하나를 받아둔다.
+// 페이지가 처음 열리면 CS 퀴즈 탭도 미리 문제 하나를 받아둠 / 저장소 목록 불러오기
 fetchQuiz();
+fetchRepoList();
 
 // ---------- 취약 주제 대시보드 ----------
 async function fetchWeakTopics() {
