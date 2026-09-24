@@ -40,8 +40,6 @@ async function analyzeRepo() {
     const repoUrl = document.getElementById("repo-url-input").value;
     document.getElementById("analyze-status").textContent = "분석 중입니다... (LLM 호출이 여러 번 있어서 시간이 좀 걸립니다)";
 
-    // fetch(): 브라우저 내장 함수로 HTTP 요청을 보낸다. async/await를 쓰면
-    // "응답이 올 때까지 기다렸다가 다음 줄로 넘어간다"처럼 동기 코드처럼 쓸 수 있다.
     const response = await fetch("/repos/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -55,12 +53,9 @@ async function analyzeRepo() {
     }
 
     const data = await response.json();
-    currentRepoId = data.repo_id;
-    document.getElementById("analyze-status").textContent = `분석 완료 (파일 ${data.file_count}개)`;
+    document.getElementById("analyze-status").textContent = `분석 완료 (파일 ${data.file_count}개). 아래 목록에서 "질문" 버튼을 눌러 시작하세요.`;
 
     await fetchRepoList(); // 방금 분석한 저장소가 리스트에 바로 반영되도록 새로고침
-
-    await startSession();
 }
 
 async function startSession() {
@@ -245,16 +240,32 @@ function renderEvaluation(evaluation) {
     return section;
 }
 
-async function fetchHistory() {
-    if (!currentSessionId) {
-        document.getElementById("history-result").textContent = "먼저 저장소를 분석해서 세션을 시작하세요.";
+async function toggleHistory() {
+    const container = document.getElementById("history-result");
+    const btn = document.getElementById("history-toggle-btn");
+
+    const isCollapsed = container.style.display === "none";
+    if (!isCollapsed) {
+        // 이미 펼쳐져 있었다면: 다시 fetch할 필요 없이 그냥 숨기기만 하면 됨
+        container.style.display = "none";
+        btn.textContent = "지금까지 기록 보기";
         return;
     }
+
+    if (!currentSessionId) {
+        container.style.display = "block";
+        container.textContent = "먼저 저장소를 분석해서 세션을 시작하세요.";
+        btn.textContent = "기록 접기";
+        return;
+    }
+
+    container.style.display = "block";
+    btn.textContent = "기록 접기";
+    container.textContent = "불러오는 중...";
 
     const response = await fetch(`/sessions/${currentSessionId}/history`);
     const data = await response.json();
 
-    const container = document.getElementById("history-result");
     container.innerHTML = "";
 
     if (data.length === 0) {
@@ -272,7 +283,6 @@ async function fetchHistory() {
         renderEvidenceBox(details, item.reference_evidence);
 
         const answerSection = addSection(details, "내 답변");
-        // ?? : item.answer가 null/undefined일 때만 오른쪽 문구를 쓰는 널 병합 연산자
         addLabeledText(answerSection, "답변", item.answer ?? "(아직 답변 안 함)");
 
         if (item.evaluation) {

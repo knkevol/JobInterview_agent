@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>AI 면접관 Agent</title>
 <style>
-  body { font-family: sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+  body { font-family: sans-serif; max-width: 1100px; margin: 40px auto; padding: 0 20px; }
   h1 { font-size: 20px; }
   section { display: none; border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-top: 16px; }
   section.active { display: block; }
@@ -50,8 +50,8 @@
 
 <!-- ============ 면접 연습 탭 ============ -->
 <div id="panel-interview">
-  <button onclick="fetchHistory()">지금까지 기록 보기</button>
-  <pre id="history-result"></pre>
+  <button id="history-toggle-btn" onclick="toggleHistory()">지금까지 기록 보기</button>
+    <pre id="history-result" style="display:none"></pre>
 
   <section id="step-analyze" class="active">
     <h2>① GitHub 저장소 분석</h2>
